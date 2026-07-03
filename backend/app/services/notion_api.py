@@ -15,6 +15,7 @@ publish_plan in mock_mode simula URL finti. Altrimenti solleva NotionNotConfigur
 
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -241,6 +242,33 @@ def _body_blocks(email: dict) -> list[dict]:
     return blocks
 
 
+def _create_page_with_retry(client, database_id: str, properties: dict, children: list[dict]):
+    """Crea una pagina nel database appena creato.
+
+    Subito dopo databases.create() Notion a volte non ha ancora sincronizzato
+    lo schema: la prima pages.create() può fallire con "X is not a property
+    that exists" anche se la proprietà è stata appena creata. Riprova con
+    backoff prima di arrendersi (stesso approccio difensivo del client
+    Klaviyo)."""
+    delay = 1.0
+    last_err: Exception | None = None
+    for attempt in range(5):
+        try:
+            return client.pages.create(
+                parent={"type": "database_id", "database_id": database_id},
+                properties=properties,
+                children=children,
+            )
+        except Exception as e:  # notion_client APIResponseError
+            if "is not a property that exists" in str(e) and attempt < 4:
+                last_err = e
+                time.sleep(delay)
+                delay = min(delay * 2, 8.0)
+                continue
+            raise
+    raise last_err  # pragma: no cover — irraggiungibile, il loop rilancia prima
+
+
 def publish_plan(db: Session, brand_name: str, month_start: str, emails: list[dict]) -> dict:
     conf = notion_config(db)
 
@@ -312,10 +340,11 @@ def publish_plan(db: Session, brand_name: str, month_start: str, emails: list[di
         pages = []
         for email in emails:
             subject = (email.get("subject_variants") or [""])[0]
-            page = client.pages.create(
-                parent={"type": "database_id", "database_id": database["id"]},
-                properties=_email_page_properties(email, subject),
-                children=_body_blocks(email),
+            page = _create_page_with_retry(
+                client,
+                database["id"],
+                _email_page_properties(email, subject),
+                _body_blocks(email),
             )
             pages.append({"email_id": email["id"], "notion_url": page.get("url", "")})
         return {
