@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
   FlaskConical,
   KeyRound,
@@ -429,6 +430,29 @@ export function Settings() {
                 ok={system.anthropic_configured}
               />
               <StatusRow label="Notion" ok={system.notion_configured} />
+              <StatusRow
+                label="Database"
+                ok={system.database_persistent}
+                okLabel={`Persistente (${system.database})`}
+                koLabel="SQLite non persistente"
+              />
+              {!system.database_persistent && (
+                <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <p className="font-medium">
+                      Attenzione: il database non è collegato a Postgres.
+                    </p>
+                    <p className="mt-0.5">
+                      Brand, piani e chiavi Klaviyo sono salvati in un file locale
+                      che viene <strong>cancellato ad ogni nuovo deploy</strong>.
+                      Collega la variabile <code>DATABASE_URL</code> al servizio
+                      Postgres su Railway (vedi DEPLOY.md) prima di inserire dati
+                      veri.
+                    </p>
+                  </div>
+                </div>
+              )}
               {system.mock_mode && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                   <FlaskConical className="mt-0.5 h-4 w-4 shrink-0" />

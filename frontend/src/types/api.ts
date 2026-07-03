@@ -8,6 +8,8 @@ export interface SystemStatus {
   anthropic_configured: boolean;
   notion_configured: boolean;
   mock_mode: boolean;
+  database: string;
+  database_persistent: boolean;
 }
 
 // -------------------- Brands

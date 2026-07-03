@@ -43,6 +43,11 @@ def check(name: str, cond: bool, extra: str = ""):
 # system
 r = client.get("/api/system/status")
 check("system/status", r.status_code == 200 and r.json()["mock_mode"] is True, str(r.json()))
+check(
+    "system/status segnala il tipo di database",
+    r.json()["database"] == "sqlite" and r.json()["database_persistent"] is False,
+    str(r.json()),
+)
 
 # auth: senza token → 401
 r = client.get("/api/brands")

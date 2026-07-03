@@ -340,6 +340,8 @@ class SystemStatus(BaseModel):
     anthropic_configured: bool
     notion_configured: bool
     mock_mode: bool
+    database: str = "sqlite"
+    database_persistent: bool = False
 
 
 class OccasionSuggestIn(BaseModel):
