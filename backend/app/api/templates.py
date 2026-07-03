@@ -17,11 +17,12 @@ from ..services.canva_set import (
     save_previews,
 )
 from ..services.notion_api import NotionAPIError, NotionNotConfigured, sync_templates
+from .deps import require_agency
 
 router = APIRouter(prefix="/api/templates", tags=["templates"])
 
 
-@router.get("", response_model=list[TemplateOut])
+@router.get("", response_model=list[TemplateOut], dependencies=[Depends(require_agency)])
 def list_templates(
     category: str | None = None, q: str | None = None, db: Session = Depends(get_db)
 ):
@@ -35,7 +36,7 @@ def list_templates(
     return query.order_by(Template.category, Template.id).all()
 
 
-@router.get("/categories")
+@router.get("/categories", dependencies=[Depends(require_agency)])
 def list_categories(db: Session = Depends(get_db)):
     rows = (
         db.query(Template.category, func.count(Template.id))
@@ -46,7 +47,7 @@ def list_categories(db: Session = Depends(get_db)):
     return [{"category": cat or "senza categoria", "count": count} for cat, count in rows]
 
 
-@router.post("/sync")
+@router.post("/sync", dependencies=[Depends(require_agency)])
 def sync(db: Session = Depends(get_db)):
     try:
         return sync_templates(db)
@@ -54,12 +55,12 @@ def sync(db: Session = Depends(get_db)):
         raise HTTPException(502, str(e))
 
 
-@router.get("/set", response_model=CanvaSetOut)
+@router.get("/set", response_model=CanvaSetOut, dependencies=[Depends(require_agency)])
 def get_canva_set(db: Session = Depends(get_db)):
     return get_config(db)
 
 
-@router.put("/set", response_model=CanvaSetOut)
+@router.put("/set", response_model=CanvaSetOut, dependencies=[Depends(require_agency)])
 def save_canva_set(payload: CanvaSetIn, db: Session = Depends(get_db)):
     entries = [e.model_dump() for e in payload.entries]
     if not entries and payload.entries_text.strip():
@@ -70,7 +71,7 @@ def save_canva_set(payload: CanvaSetIn, db: Session = Depends(get_db)):
         raise HTTPException(422, str(e))
 
 
-@router.post("/previews")
+@router.post("/previews", dependencies=[Depends(require_agency)])
 async def upload_previews(
     files: list[UploadFile] = File(...), db: Session = Depends(get_db)
 ):

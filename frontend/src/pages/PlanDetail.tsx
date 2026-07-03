@@ -19,12 +19,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmailCard } from "@/components/domain/EmailCard";
 import { PlanStatusBadge } from "@/components/domain/PlanStatusBadge";
 import {
+  useBrand,
   useDeletePlan,
   useGeneratePlan,
   usePlan,
   usePublishPlan,
   useUpdatePlan,
 } from "@/lib/queries";
+import { useAuth } from "@/lib/auth";
 import { formatMonth } from "@/lib/utils";
 import type { PlanDetail as PlanDetailType } from "@/types/api";
 
@@ -178,7 +180,10 @@ export function PlanDetail() {
   const planId = Number(planIdParam);
   const navigate = useNavigate();
 
+  const { user } = useAuth();
+  const isAgency = user?.role === "agency";
   const { data: plan, isLoading, isError, error } = usePlan(planId);
+  const { data: brand } = useBrand(brandId);
   const updatePlan = useUpdatePlan(planId, brandId);
   const publishPlan = usePublishPlan(planId, brandId);
   const deletePlan = useDeletePlan(brandId);
@@ -215,7 +220,13 @@ export function PlanDetail() {
       { status: "approved" },
       {
         onSuccess: () => toast.success("Piano approvato"),
-        onError: (err) => toast.error(`Errore: ${err.message}`),
+        onError: (err) => {
+          if (err.status === 409) {
+            toast.error(err.message, { duration: 8000 });
+          } else {
+            toast.error(`Errore: ${err.message}`);
+          }
+        },
       }
     );
   }
@@ -286,6 +297,8 @@ export function PlanDetail() {
 
   const readOnly = plan.status === "published";
   const sortedEmails = [...plan.emails].sort((a, b) => a.position - b.position);
+  const graficheCount = plan.emails.filter((e) => e.format !== "testuale").length;
+  const packageRemaining = brand ? Math.max(0, brand.package_total - brand.package_used) : 0;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -317,10 +330,24 @@ export function PlanDetail() {
             plan.status === "published") && (
             <div className="flex items-center gap-2">
               {plan.status === "draft" && (
-                <Button onClick={handleApprove} disabled={updatePlan.isPending}>
-                  <CheckCircle2 className="h-4 w-4" />
-                  Approva piano
-                </Button>
+                <div className="flex flex-col items-end gap-1">
+                  <Button onClick={handleApprove} disabled={updatePlan.isPending}>
+                    <CheckCircle2 className="h-4 w-4" />
+                    Approva piano
+                  </Button>
+                  {brand && (
+                    <span
+                      className={`text-xs ${
+                        graficheCount > packageRemaining
+                          ? "font-medium text-destructive"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {graficheCount} grafiche nel piano · {packageRemaining} disponibili
+                      nel pacchetto
+                    </span>
+                  )}
+                </div>
               )}
               {plan.status === "approved" && (
                 <Button
@@ -377,19 +404,23 @@ export function PlanDetail() {
           <AlertTitle>Generazione fallita</AlertTitle>
           <AlertDescription className="space-y-3">
             <p>{plan.error ?? "Errore sconosciuto durante la generazione."}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRetry}
-              disabled={deletePlan.isPending || generatePlan.isPending}
-            >
-              {deletePlan.isPending || generatePlan.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              Riprova generazione
-            </Button>
+            {isAgency ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRetry}
+                disabled={deletePlan.isPending || generatePlan.isPending}
+              >
+                {deletePlan.isPending || generatePlan.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                Riprova generazione
+              </Button>
+            ) : (
+              <p className="text-sm">Contatta l'agenzia per rigenerare il piano.</p>
+            )}
           </AlertDescription>
         </Alert>
       )}

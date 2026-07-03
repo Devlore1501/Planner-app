@@ -1,5 +1,18 @@
 const BASE = "/api";
 
+let authToken: string | null = null;
+let onUnauthorized: (() => void) | null = null;
+
+/** Chiamato dall'AuthProvider quando cambia il token (login/logout/rehydrate). */
+export function setAuthToken(token: string | null): void {
+  authToken = token;
+}
+
+/** Chiamato dall'AuthProvider per reagire a un 401 (sessione scaduta/non valida). */
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
+}
+
 export class ApiError extends Error {
   status: number;
   body: unknown;
@@ -42,6 +55,9 @@ async function handle<T>(res: Response): Promise<T> {
       (body && typeof body === "object" && "detail" in (body as any)
         ? (body as any).detail
         : null) || res.statusText;
+    if (res.status === 401) {
+      onUnauthorized?.();
+    }
     throw new ApiError(
       typeof detail === "string" ? detail : `HTTP ${res.status}`,
       res.status,
@@ -49,6 +65,10 @@ async function handle<T>(res: Response): Promise<T> {
     );
   }
   return (await parseResponse(res)) as T;
+}
+
+function authHeaders(): Record<string, string> {
+  return authToken ? { Authorization: `Bearer ${authToken}` } : {};
 }
 
 async function request<T>(
@@ -61,6 +81,7 @@ async function request<T>(
     method,
     headers: {
       Accept: "application/json",
+      ...authHeaders(),
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -99,7 +120,7 @@ export async function apiUpload<T>(
 ): Promise<T> {
   const res = await fetch(buildUrl(path, params), {
     method: "POST",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", ...authHeaders() },
     body: formData,
   });
   return handle<T>(res);

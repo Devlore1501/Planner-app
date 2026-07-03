@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { useBrands } from "@/lib/queries";
 import { setLastBrandId } from "@/lib/brand";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 interface BrandSwitcherProps {
   currentBrandId: number | null;
@@ -26,10 +27,13 @@ interface BrandSwitcherProps {
 /**
  * Brand switcher in topbar: dropdown con ricerca (Command).
  * Cambiando brand naviga a /brands/:id/plans e persiste la scelta.
+ * Un account cliente ha un solo brand: mostra un'etichetta statica invece
+ * del selettore (niente "Nuovo brand", niente switch inutile).
  */
 export function BrandSwitcher({ currentBrandId }: BrandSwitcherProps) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data: brands, isLoading } = useBrands();
 
   const current = brands?.find((b) => b.id === currentBrandId) ?? null;
@@ -38,6 +42,17 @@ export function BrandSwitcher({ currentBrandId }: BrandSwitcherProps) {
     setLastBrandId(id);
     setOpen(false);
     navigate(`/brands/${id}/plans`);
+  }
+
+  if (user?.role === "client") {
+    return (
+      <span className="flex w-[220px] items-center gap-2 rounded-md border border-input bg-card px-3 py-2 text-sm">
+        <Store className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="truncate font-medium">
+          {current?.name ?? user.brand_name ?? "Il tuo brand"}
+        </span>
+      </span>
+    );
   }
 
   return (

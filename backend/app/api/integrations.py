@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import settings as cfg
 from ..db import get_db
-from ..models.db_models import Template
+from ..models.db_models import Template, User
 from ..models.schemas import (
     KlaviyoKeyIn,
     KlaviyoStatus,
@@ -19,8 +19,9 @@ from ..models.schemas import (
 from ..services import klaviyo, mockdata
 from ..services.settings_store import get_setting, set_setting
 from .brands import get_brand_or_404
+from .deps import require_agency
 
-router = APIRouter(prefix="/api", tags=["integrations"])
+router = APIRouter(prefix="/api", tags=["integrations"], dependencies=[Depends(require_agency)])
 
 
 def _key_preview(key: str) -> str | None:

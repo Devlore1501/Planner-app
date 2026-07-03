@@ -42,6 +42,14 @@ URL, un solo servizio da pagare, zero problemi di CORS tra domini diversi.
    - `ANTHROPIC_API_KEY` → la tua chiave Claude (senza, l'app parte in
      modalità demo)
    - `PLANNER_CLAUDE_MODEL` → opzionale, default `claude-opus-4-8`
+   - `PLANNER_JWT_SECRET` → **obbligatoria in produzione**, una stringa lunga
+     e casuale (es. generata con `openssl rand -hex 32`); firma i token di
+     login — senza impostarla esplicitamente, ogni riavvio del servizio
+     disconnette tutti
+   - `PLANNER_ADMIN_EMAIL` / `PLANNER_ADMIN_PASSWORD` → credenziali del primo
+     account agenzia, creato in automatico al primo avvio se il database non
+     ha ancora utenti. Cambia la password dal primo login (Impostazioni →
+     Utenti → icona chiave sul tuo account)
    - Notion e Klaviyo si configurano **dall'interfaccia** (Impostazioni /
      profilo brand), non servono variabili d'ambiente per quelli
 5. **Aggiungi un volume**: Settings → Volumes → monta `/data` sul servizio.
@@ -60,6 +68,10 @@ URL, un solo servizio da pagare, zero problemi di CORS tra domini diversi.
   `"mock_mode": false`.
 - La UI deve caricare su `https://<tuo-dominio>/` (stessa origine delle API,
   niente configurazione CORS aggiuntiva necessaria).
+- Fai login con `PLANNER_ADMIN_EMAIL`/`PLANNER_ADMIN_PASSWORD`, cambia subito
+  la password (Impostazioni → Utenti), poi crea gli account cliente da lì
+  (email + password + brand): ogni cliente vede solo il proprio brand, può
+  approvare il piano (scala il pacchetto grafiche) e pubblicarlo su Notion.
 
 ## Deploy continuo
 

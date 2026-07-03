@@ -22,7 +22,7 @@ pubblicazione del calendario approvato su Notion.
 - Avvio locale: `./start.sh` (kill automatico istanze zombie; fix bash 3.2 macOS)
 - Deploy produzione: **Railway**, vedi `DEPLOY.md` — Docker multi-stage
   (`Dockerfile`) che serve backend+frontend da un solo servizio/URL
-- Test: `cd backend && ../.venv/bin/python tests/smoke_test.py` (~65 check, mock mode)
+- Test: `cd backend && ../.venv/bin/python tests/smoke_test.py` (~80 check, mock mode)
 
 ## Funzionalità completate
 
@@ -84,6 +84,42 @@ pubblicazione del calendario approvato su Notion.
     proposte extra (`plan.campaigns`). Le sequenze contano nelle quote 70/20/10.
     API: CRUD `/brands/{id}/launches` + `PATCH /launches/{id}`; prompt/schema in
     `claude_ai.py`, mock in `mockdata.py::_mock_sequence`
+14. **Login + pacchetto grafiche (money model)**: due ruoli — **agency** (tutti i
+    brand, integrazioni/template/utenti) e **client** (un solo brand, sola lettura sul
+    catalogo, può approvare/pubblicare il proprio piano). JWT via `Authorization:
+    Bearer`, bootstrap del primo utente agency da `PLANNER_ADMIN_EMAIL/PASSWORD` se il
+    DB non ha ancora utenti. Ogni brand ha `package_total`/`package_used` (pool che si
+    esaurisce, nessun rinnovo automatico); l'approvazione del piano (draft→approved)
+    conta le email `format != testuale` nel piano e le scala dal pacchetto, **409 se
+    non basta**; tornare a bozza (approved→draft) storna i crediti. Nessun auto-publish
+    collegato all'approvazione: sono due endpoint separati (`PATCH status=approved` poi
+    `POST /publish`), entrambi permessi al cliente sul proprio brand — il frontend li
+    mostra come due bottoni distinti in sequenza.
+    Backend: `models/db_models.py::User` (email, password_hash, role, brand_id),
+    `api/deps.py` (`get_current_user`, `require_agency`, `require_brand_access`,
+    `check_brand_access`), `api/auth.py` (login/me + CRUD utenti agency-only),
+    `services/auth.py` (bcrypt + PyJWT). Router interamente agency-only via
+    `dependencies=[Depends(require_agency)]`: `integrations.py` (Klaviyo+Notion),
+    quasi tutto `templates.py` (eccetto `GET /previews/{page}` lasciato pubblico
+    apposta, altrimenti i tag `<img>` non riescono a mandare l'header Authorization).
+    `catalog.py`: liste con `require_brand_access`, scritture con `require_agency`
+    (client = sola lettura su prodotti/offerte/occasioni/lanci).
+    Frontend: `lib/auth.tsx` (AuthProvider/useAuth, token in localStorage),
+    `lib/api.ts` (`setAuthToken`, header automatico, `setUnauthorizedHandler` per
+    logout su 401), `pages/Login.tsx`, guardie in `App.tsx` (`RequireAuth`,
+    `RequireAgency`, `HomeRedirect` salta la Dashboard e porta il client dritto al
+    proprio piano). Sidebar/TopBar/BrandSwitcher adattati per ruolo (client: niente
+    switcher — badge statico, niente Integrazioni/Template/Impostazioni). Ogni pagina
+    con azioni di scrittura (Catalog, Plans, PlanDetail retry-on-error) nasconde i
+    controlli agency-only per il client invece di lasciarli lì a fallire con 403.
+    UI pacchetto: card dedicata in `BrandProfile.tsx` (barra di progresso, ricarica
+    per agency); hint crediti disponibili vicino al bottone "Approva piano" in
+    `PlanDetail.tsx`. Gestione utenti (creare/reset password/eliminare account
+    cliente) in `Settings.tsx` (agency-only).
+    Verificato end-to-end con Playwright reale (non solo API): login, sidebar/nav
+    per ruolo, catalogo sola-lettura per il client, approvazione con scalo
+    pacchetto visibile in tempo reale sul profilo brand, blocco con toast quando il
+    pacchetto non basta.
 
 ## Deploy (nuovo)
 
@@ -116,6 +152,11 @@ pubblicazione del calendario approvato su Notion.
 - Notion: token/DB template/pagina calendari NON ancora configurati (si fa da UI → Impostazioni)
 - Env letto da `.env` in root repo o `~/.secrets/mailift/.env`
 - `PLANNER_CLAUDE_MODEL` default `claude-opus-4-8`
+- Login attivo: primo utente agency bootstrap da `PLANNER_ADMIN_EMAIL`/`PASSWORD`
+  (default `admin@mailift.local` / `mailift-admin` se non impostate — Lorenzo deve
+  cambiare la password dal primo login, Impostazioni → Utenti)
+- Su Railway servono in più: `PLANNER_JWT_SECRET` (obbligatoria, altrimenti le sessioni
+  saltano ad ogni redeploy) e volentieri `PLANNER_ADMIN_EMAIL/PASSWORD` personalizzate
 
 ## Dettagli tecnici da ricordare
 
@@ -131,7 +172,10 @@ pubblicazione del calendario approvato su Notion.
 
 ## Possibili prossimi passi (non richiesti, da confermare con Lorenzo)
 
-- Autenticazione multi-utente per l'agenzia
+- Rinnovo automatico/periodico del pacchetto grafiche (oggi è un pool manuale, mai
+  auto-rinnovato — scelta esplicita di Lorenzo)
+- Notifica email/reset password self-service per gli account cliente (oggi il reset
+  lo fa l'agenzia da Impostazioni)
 - Creazione bozze campagna direttamente su Klaviyo (write API)
 - Vista calendario visuale (griglia mese) oltre alla lista card
 - Altri canali (SMS/WhatsApp) come nuovi servizi in `app/services/`

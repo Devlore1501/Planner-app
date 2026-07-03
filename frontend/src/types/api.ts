@@ -31,6 +31,8 @@ export interface Brand {
   emails_per_week: number;
   country: string;
   klaviyo_configured: boolean;
+  package_total: number;
+  package_used: number;
   created_at: string;
   updated_at: string;
 }
@@ -52,7 +54,13 @@ export interface BrandSummary {
   num_active_offers: number;
   last_plan_status: PlanStatus | null;
   last_plan_month_start: string | null;
+  package_total: number;
+  package_used: number;
   created_at: string;
+}
+
+export interface PackageInput {
+  package_total: number;
 }
 
 export interface BrandCreate {
@@ -427,4 +435,35 @@ export interface OccasionSuggestOut {
   country: string;
   month: string;
   suggestions: OccasionSuggestion[];
+}
+
+// -------------------- Auth / utenti
+
+export type UserRole = "agency" | "client";
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  role: UserRole;
+  brand_id: number | null;
+  brand_name: string | null;
+  created_at: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+}
+
+export interface UserCreateInput {
+  email: string;
+  password: string;
+  role: UserRole;
+  brand_id?: number | null;
 }

@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut, apiUpload, ApiError } from "@/lib/api";
 import type {
+  AuthUser,
   Brand,
   BrandCreate,
   BrandSummary,
@@ -24,6 +25,7 @@ import type {
   OccasionSuggestOut,
   Offer,
   OfferInput,
+  PackageInput,
   PlanDetail,
   PlanEmail,
   PlanEmailUpdate,
@@ -37,6 +39,7 @@ import type {
   Template,
   TemplateCategory,
   TemplatesSyncResult,
+  UserCreateInput,
 } from "@/types/api";
 
 // -------------------- Query keys
@@ -58,6 +61,7 @@ export const keys = {
   canvaSet: ["canva-set"] as const,
   plans: (brandId: number) => ["plans", brandId] as const,
   plan: (planId: number) => ["plan", planId] as const,
+  users: ["users"] as const,
 };
 
 // -------------------- System
@@ -101,6 +105,17 @@ export function useUpdateBrand(brandId: number) {
   const qc = useQueryClient();
   return useMutation<Brand, ApiError, BrandUpdate>({
     mutationFn: (data) => apiPatch<Brand>(`/brands/${brandId}`, data),
+    onSuccess: (brand) => {
+      qc.setQueryData(keys.brand(brandId), brand);
+      qc.invalidateQueries({ queryKey: keys.brands });
+    },
+  });
+}
+
+export function useSetPackage(brandId: number) {
+  const qc = useQueryClient();
+  return useMutation<Brand, ApiError, PackageInput>({
+    mutationFn: (data) => apiPatch<Brand>(`/brands/${brandId}/package`, data),
     onSuccess: (brand) => {
       qc.setQueryData(keys.brand(brandId), brand);
       qc.invalidateQueries({ queryKey: keys.brands });
@@ -560,6 +575,46 @@ export function usePublishPlan(planId: number, brandId: number) {
       qc.invalidateQueries({ queryKey: keys.plan(planId) });
       qc.invalidateQueries({ queryKey: keys.plans(brandId) });
       qc.invalidateQueries({ queryKey: keys.brands });
+    },
+  });
+}
+
+// -------------------- Utenti (solo agenzia)
+
+export function useUsers() {
+  return useQuery<AuthUser[]>({
+    queryKey: keys.users,
+    queryFn: () => apiGet<AuthUser[]>("/users"),
+  });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation<AuthUser, ApiError, UserCreateInput>({
+    mutationFn: (data) => apiPost<AuthUser>("/users", data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.users });
+    },
+  });
+}
+
+export function useResetUserPassword() {
+  const qc = useQueryClient();
+  return useMutation<AuthUser, ApiError, { id: number; password: string }>({
+    mutationFn: ({ id, password }) =>
+      apiPatch<AuthUser>(`/users/${id}/password`, { password }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.users });
+    },
+  });
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation<null, ApiError, number>({
+    mutationFn: (id) => apiDelete(`/users/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.users });
     },
   });
 }

@@ -31,12 +31,15 @@ import {
   useGeneratePlan,
   usePlans,
 } from "@/lib/queries";
+import { useAuth } from "@/lib/auth";
 import { formatMonth, nextMonthStart } from "@/lib/utils";
 
 export function Plans() {
   const { brandId: brandIdParam } = useParams();
   const brandId = Number(brandIdParam);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAgency = user?.role === "agency";
 
   const { data: brand } = useBrand(brandId);
   const { data: plans, isLoading } = usePlans(brandId);
@@ -97,10 +100,12 @@ export function Plans() {
             {brand ? `Calendari mensili di ${brand.name}` : "Calendari mensili"}
           </p>
         </div>
-        <Button size="lg" onClick={openDialog}>
-          <Sparkles className="h-4 w-4" />
-          Genera piano mensile
-        </Button>
+        {isAgency && (
+          <Button size="lg" onClick={openDialog}>
+            <Sparkles className="h-4 w-4" />
+            Genera piano mensile
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -113,12 +118,18 @@ export function Plans() {
         <EmptyState
           icon={CalendarDays}
           title="Nessun piano"
-          description="Genera il primo calendario editoriale mensile per questo brand: Claude userà profilo, catalogo, dati Klaviyo e le festività del paese."
+          description={
+            isAgency
+              ? "Genera il primo calendario editoriale mensile per questo brand: Claude userà profilo, catalogo, dati Klaviyo e le festività del paese."
+              : "L'agenzia non ha ancora generato un piano editoriale per questo mese."
+          }
           action={
-            <Button onClick={openDialog}>
-              <Sparkles className="h-4 w-4" />
-              Genera piano mensile
-            </Button>
+            isAgency && (
+              <Button onClick={openDialog}>
+                <Sparkles className="h-4 w-4" />
+                Genera piano mensile
+              </Button>
+            )
           }
         />
       ) : (
@@ -130,7 +141,7 @@ export function Plans() {
                 <TableHead>Stato</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Note</TableHead>
-                <TableHead className="w-[60px]"></TableHead>
+                {isAgency && <TableHead className="w-[60px]"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -163,29 +174,31 @@ export function Plans() {
                   <TableCell className="max-w-[240px] truncate text-sm text-muted-foreground">
                     {plan.notes || "—"}
                   </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Elimina piano"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (
-                          window.confirm(
-                            `Eliminare il piano di ${formatMonth(plan.month_start)}?`
-                          )
-                        ) {
-                          deletePlan.mutate(plan.id, {
-                            onSuccess: () => toast.success("Piano eliminato"),
-                            onError: (err) =>
-                              toast.error(`Errore: ${err.message}`),
-                          });
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-muted-foreground" />
-                    </Button>
-                  </TableCell>
+                  {isAgency && (
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Elimina piano"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (
+                            window.confirm(
+                              `Eliminare il piano di ${formatMonth(plan.month_start)}?`
+                            )
+                          ) {
+                            deletePlan.mutate(plan.id, {
+                              onSuccess: () => toast.success("Piano eliminato"),
+                              onError: (err) =>
+                                toast.error(`Errore: ${err.message}`),
+                            });
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

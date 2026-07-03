@@ -44,8 +44,14 @@ class BrandOut(BaseModel):
     emails_per_week: int
     country: str
     klaviyo_configured: bool = False
+    package_total: int = 0
+    package_used: int = 0
     created_at: datetime
     updated_at: datetime
+
+
+class PackageIn(BaseModel):
+    package_total: int = Field(ge=0)
 
 
 class BrandSummary(BaseModel):
@@ -58,6 +64,8 @@ class BrandSummary(BaseModel):
     num_active_offers: int
     last_plan_status: str | None = None
     last_plan_month_start: str | None = None
+    package_total: int = 0
+    package_used: int = 0
     created_at: datetime
 
 
@@ -349,3 +357,39 @@ class OccasionSuggestOut(BaseModel):
     country: str
     month: str
     suggestions: list[OccasionSuggestion]
+
+
+# -------------------- Auth / utenti
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    role: Literal["agency", "client"]
+    brand_id: int | None = None
+    brand_name: str | None = None
+    created_at: datetime
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    role: Literal["agency", "client"] = "client"
+    brand_id: int | None = None
+
+
+class UserPasswordReset(BaseModel):
+    password: str

@@ -16,8 +16,9 @@ from fastapi.staticfiles import StaticFiles
 
 from sqlalchemy import inspect, text
 
-from .db import Base, engine
-from .api import brands, catalog, integrations, plans, system, templates
+from . import settings as cfg
+from .db import Base, SessionLocal, engine
+from .api import auth, brands, catalog, integrations, plans, system, templates
 
 Base.metadata.create_all(bind=engine)
 
@@ -55,9 +56,40 @@ def _migrate() -> None:
             conn.execute(text("ALTER TABLE plan_emails ADD COLUMN campaign JSON"))
         if "campaigns" not in cols("plans"):
             conn.execute(text("ALTER TABLE plans ADD COLUMN campaigns JSON"))
+        bcols = cols("brands")
+        if "package_total" not in bcols:
+            conn.execute(text("ALTER TABLE brands ADD COLUMN package_total INTEGER DEFAULT 0"))
+        if "package_used" not in bcols:
+            conn.execute(text("ALTER TABLE brands ADD COLUMN package_used INTEGER DEFAULT 0"))
 
 
 _migrate()
+
+
+def _bootstrap_admin() -> None:
+    """Se non esiste nessun utente, crea il primo account agenzia da env
+    (PLANNER_ADMIN_EMAIL/PLANNER_ADMIN_PASSWORD) cosi' si puo' sempre fare
+    il primo login, poi da UI si creano gli altri account."""
+    from .models.db_models import User
+    from .services.auth import hash_password
+
+    db = SessionLocal()
+    try:
+        if db.query(User).first() is not None:
+            return
+        db.add(
+            User(
+                email=cfg.ADMIN_EMAIL.strip().lower(),
+                password_hash=hash_password(cfg.ADMIN_PASSWORD),
+                role="agency",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+_bootstrap_admin()
 
 app = FastAPI(title="Mailift Planner", version="0.1.0")
 
@@ -73,6 +105,8 @@ app.add_middleware(
 )
 
 app.include_router(system.router)
+app.include_router(auth.router)
+app.include_router(auth.users_router)
 app.include_router(brands.router)
 app.include_router(catalog.router)
 app.include_router(integrations.router)

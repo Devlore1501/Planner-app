@@ -44,6 +44,21 @@ def check(name: str, cond: bool, extra: str = ""):
 r = client.get("/api/system/status")
 check("system/status", r.status_code == 200 and r.json()["mock_mode"] is True, str(r.json()))
 
+# auth: senza token → 401
+r = client.get("/api/brands")
+check("senza token → 401", r.status_code == 401, str(r.status_code))
+
+r = client.post("/api/auth/login", json={"email": cfg.ADMIN_EMAIL, "password": "sbagliata"})
+check("login password errata → 401", r.status_code == 401)
+
+r = client.post("/api/auth/login", json={"email": cfg.ADMIN_EMAIL, "password": cfg.ADMIN_PASSWORD})
+check("login agenzia (bootstrap)", r.status_code == 200 and r.json()["user"]["role"] == "agency", str(r.status_code))
+agency_token = r.json()["access_token"]
+client.headers.update({"Authorization": f"Bearer {agency_token}"})
+
+r = client.get("/api/auth/me")
+check("auth/me", r.status_code == 200 and r.json()["role"] == "agency")
+
 # brand
 r = client.post(
     "/api/brands",
@@ -214,9 +229,43 @@ check("regenerate email", r.status_code == 200 and r.json()["status"] == "draft"
 r = client.post(f"/api/plans/{plan_id}/publish")
 check("publish senza approvazione → 409", r.status_code == 409)
 
+# ---- pacchetto grafiche: blocca l'approvazione se non basta, scala/storna sui crediti
+grafiche_nel_piano = sum(1 for e in plan["emails"] if e["format"] != "testuale")
+
+r = client.patch(f"/api/plans/{plan_id}", json={"status": "approved"})
+check(
+    "approvazione senza pacchetto → 409",
+    r.status_code == 409 and "pacchetto" in r.json()["detail"].lower(),
+    str(r.json()),
+)
+
+r = client.patch(f"/api/brands/{brand_id}/package", json={"package_total": grafiche_nel_piano})
+check(
+    "ricarica pacchetto",
+    r.status_code == 200 and r.json()["package_total"] == grafiche_nel_piano,
+    str(r.json()),
+)
+
 # approve
 r = client.patch(f"/api/plans/{plan_id}", json={"status": "approved"})
 check("approve plan", r.status_code == 200 and r.json()["status"] == "approved")
+
+r = client.get(f"/api/brands/{brand_id}")
+check(
+    "pacchetto scalato dopo approvazione",
+    r.json()["package_used"] == grafiche_nel_piano,
+    str(r.json()["package_used"]),
+)
+
+# torna in bozza → storna i crediti
+r = client.patch(f"/api/plans/{plan_id}", json={"status": "draft"})
+check("torna in bozza", r.status_code == 200 and r.json()["status"] == "draft")
+r = client.get(f"/api/brands/{brand_id}")
+check("pacchetto stornato", r.json()["package_used"] == 0, str(r.json()["package_used"]))
+
+# riapprova per proseguire col flusso di pubblicazione
+r = client.patch(f"/api/plans/{plan_id}", json={"status": "approved"})
+check("riapprova plan", r.status_code == 200 and r.json()["status"] == "approved")
 
 # publish (mock)
 r = client.post(f"/api/plans/{plan_id}/publish")
@@ -228,6 +277,40 @@ check(
 
 r = client.get(f"/api/plans/{plan_id}")
 check("plan published", r.json()["status"] == "published")
+
+# ---- ruoli: account cliente vede solo il proprio brand, niente pagine agenzia
+brand_altro = client.post("/api/brands", json={"name": "Altro Brand"}).json()["id"]
+
+r = client.post(
+    "/api/users",
+    json={"email": "cliente@bergamo.test", "password": "clientepw123", "role": "client", "brand_id": brand_id},
+)
+check("crea utente cliente", r.status_code == 201, str(r.status_code))
+
+r = client.post("/api/auth/login", json={"email": "cliente@bergamo.test", "password": "clientepw123"})
+check("login cliente", r.status_code == 200 and r.json()["user"]["role"] == "client")
+client_token = r.json()["access_token"]
+client.headers.update({"Authorization": f"Bearer {client_token}"})
+
+r = client.get(f"/api/brands/{brand_id}")
+check("cliente legge il proprio brand", r.status_code == 200)
+r = client.get(f"/api/brands/{brand_altro}")
+check("cliente NON legge un altro brand → 403", r.status_code == 403, str(r.status_code))
+r = client.get(f"/api/brands/{brand_id}/products")
+check("cliente legge il catalogo (sola lettura)", r.status_code == 200)
+r = client.post(f"/api/brands/{brand_id}/products", json={"name": "Non dovrebbe passare"})
+check("cliente NON crea prodotti → 403", r.status_code == 403, str(r.status_code))
+r = client.post("/api/brands", json={"name": "Non dovrebbe passare"})
+check("cliente NON crea brand → 403", r.status_code == 403)
+r = client.get("/api/templates")
+check("cliente NON accede ai template → 403", r.status_code == 403)
+r = client.get("/api/settings/notion")
+check("cliente NON accede alle impostazioni Notion → 403", r.status_code == 403)
+r = client.get(f"/api/plans/{plan_id}")
+check("cliente legge il proprio piano", r.status_code == 200)
+
+client.headers.update({"Authorization": f"Bearer {agency_token}"})
+client.delete(f"/api/brands/{brand_altro}")
 
 # ---- lanci & promo: sequenza dedicata nel piano
 r = client.post(

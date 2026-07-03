@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models.db_models import Launch, Occasion, Offer, Product
+from ..models.db_models import Launch, Occasion, Offer, Product, User
 from ..models.schemas import (
     LaunchBase,
     LaunchCreate,
@@ -25,6 +25,7 @@ from ..models.schemas import (
 )
 from ..services import claude_ai
 from .brands import get_brand_or_404
+from .deps import require_agency, require_brand_access
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
@@ -38,13 +39,15 @@ def _apply(entity, payload) -> None:
 
 
 @router.get("/brands/{brand_id}/products", response_model=list[ProductOut])
-def list_products(brand_id: int, db: Session = Depends(get_db)):
+def list_products(brand_id: int, db: Session = Depends(get_db), _: User = Depends(require_brand_access)):
     get_brand_or_404(db, brand_id)
     return db.query(Product).filter(Product.brand_id == brand_id).order_by(Product.name).all()
 
 
 @router.post("/brands/{brand_id}/products", response_model=ProductOut, status_code=201)
-def create_product(brand_id: int, payload: ProductCreate, db: Session = Depends(get_db)):
+def create_product(
+    brand_id: int, payload: ProductCreate, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
     get_brand_or_404(db, brand_id)
     product = Product(brand_id=brand_id)
     _apply(product, payload)
@@ -55,7 +58,9 @@ def create_product(brand_id: int, payload: ProductCreate, db: Session = Depends(
 
 
 @router.patch("/products/{product_id}", response_model=ProductOut)
-def update_product(product_id: int, payload: ProductBase, db: Session = Depends(get_db)):
+def update_product(
+    product_id: int, payload: ProductBase, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
     product = db.get(Product, product_id)
     if product is None:
         raise HTTPException(404, "Prodotto non trovato")
@@ -66,7 +71,7 @@ def update_product(product_id: int, payload: ProductBase, db: Session = Depends(
 
 
 @router.delete("/products/{product_id}", status_code=204)
-def delete_product(product_id: int, db: Session = Depends(get_db)):
+def delete_product(product_id: int, db: Session = Depends(get_db), _: User = Depends(require_agency)):
     product = db.get(Product, product_id)
     if product is None:
         raise HTTPException(404, "Prodotto non trovato")
@@ -78,13 +83,15 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/brands/{brand_id}/offers", response_model=list[OfferOut])
-def list_offers(brand_id: int, db: Session = Depends(get_db)):
+def list_offers(brand_id: int, db: Session = Depends(get_db), _: User = Depends(require_brand_access)):
     get_brand_or_404(db, brand_id)
     return db.query(Offer).filter(Offer.brand_id == brand_id).order_by(Offer.id.desc()).all()
 
 
 @router.post("/brands/{brand_id}/offers", response_model=OfferOut, status_code=201)
-def create_offer(brand_id: int, payload: OfferCreate, db: Session = Depends(get_db)):
+def create_offer(
+    brand_id: int, payload: OfferCreate, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
     get_brand_or_404(db, brand_id)
     offer = Offer(brand_id=brand_id)
     _apply(offer, payload)
@@ -95,7 +102,9 @@ def create_offer(brand_id: int, payload: OfferCreate, db: Session = Depends(get_
 
 
 @router.patch("/offers/{offer_id}", response_model=OfferOut)
-def update_offer(offer_id: int, payload: OfferBase, db: Session = Depends(get_db)):
+def update_offer(
+    offer_id: int, payload: OfferBase, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
     offer = db.get(Offer, offer_id)
     if offer is None:
         raise HTTPException(404, "Offerta non trovata")
@@ -106,7 +115,7 @@ def update_offer(offer_id: int, payload: OfferBase, db: Session = Depends(get_db
 
 
 @router.delete("/offers/{offer_id}", status_code=204)
-def delete_offer(offer_id: int, db: Session = Depends(get_db)):
+def delete_offer(offer_id: int, db: Session = Depends(get_db), _: User = Depends(require_agency)):
     offer = db.get(Offer, offer_id)
     if offer is None:
         raise HTTPException(404, "Offerta non trovata")
@@ -118,7 +127,7 @@ def delete_offer(offer_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/brands/{brand_id}/occasions", response_model=list[OccasionOut])
-def list_occasions(brand_id: int, db: Session = Depends(get_db)):
+def list_occasions(brand_id: int, db: Session = Depends(get_db), _: User = Depends(require_brand_access)):
     get_brand_or_404(db, brand_id)
     return (
         db.query(Occasion).filter(Occasion.brand_id == brand_id).order_by(Occasion.date).all()
@@ -126,7 +135,9 @@ def list_occasions(brand_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/brands/{brand_id}/occasions", response_model=OccasionOut, status_code=201)
-def create_occasion(brand_id: int, payload: OccasionCreate, db: Session = Depends(get_db)):
+def create_occasion(
+    brand_id: int, payload: OccasionCreate, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
     get_brand_or_404(db, brand_id)
     occasion = Occasion(brand_id=brand_id)
     _apply(occasion, payload)
@@ -138,7 +149,7 @@ def create_occasion(brand_id: int, payload: OccasionCreate, db: Session = Depend
 
 @router.post("/brands/{brand_id}/occasions/suggest", response_model=OccasionSuggestOut)
 def suggest_occasions(
-    brand_id: int, payload: OccasionSuggestIn, db: Session = Depends(get_db)
+    brand_id: int, payload: OccasionSuggestIn, db: Session = Depends(get_db), _: User = Depends(require_agency)
 ):
     """Analizza festività, ponti e ricorrenze del paese del brand nel mese
     indicato e propone date + idee email da inserire a calendario."""
@@ -162,7 +173,9 @@ def suggest_occasions(
 
 
 @router.patch("/occasions/{occasion_id}", response_model=OccasionOut)
-def update_occasion(occasion_id: int, payload: OccasionBase, db: Session = Depends(get_db)):
+def update_occasion(
+    occasion_id: int, payload: OccasionBase, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
     occasion = db.get(Occasion, occasion_id)
     if occasion is None:
         raise HTTPException(404, "Occasione non trovata")
@@ -173,7 +186,7 @@ def update_occasion(occasion_id: int, payload: OccasionBase, db: Session = Depen
 
 
 @router.delete("/occasions/{occasion_id}", status_code=204)
-def delete_occasion(occasion_id: int, db: Session = Depends(get_db)):
+def delete_occasion(occasion_id: int, db: Session = Depends(get_db), _: User = Depends(require_agency)):
     occasion = db.get(Occasion, occasion_id)
     if occasion is None:
         raise HTTPException(404, "Occasione non trovata")
@@ -185,7 +198,7 @@ def delete_occasion(occasion_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/brands/{brand_id}/launches", response_model=list[LaunchOut])
-def list_launches(brand_id: int, db: Session = Depends(get_db)):
+def list_launches(brand_id: int, db: Session = Depends(get_db), _: User = Depends(require_brand_access)):
     get_brand_or_404(db, brand_id)
     return (
         db.query(Launch)
@@ -196,7 +209,9 @@ def list_launches(brand_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/brands/{brand_id}/launches", response_model=LaunchOut, status_code=201)
-def create_launch(brand_id: int, payload: LaunchCreate, db: Session = Depends(get_db)):
+def create_launch(
+    brand_id: int, payload: LaunchCreate, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
     get_brand_or_404(db, brand_id)
     launch = Launch(brand_id=brand_id)
     _apply(launch, payload)
@@ -207,7 +222,9 @@ def create_launch(brand_id: int, payload: LaunchCreate, db: Session = Depends(ge
 
 
 @router.patch("/launches/{launch_id}", response_model=LaunchOut)
-def update_launch(launch_id: int, payload: LaunchBase, db: Session = Depends(get_db)):
+def update_launch(
+    launch_id: int, payload: LaunchBase, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
     launch = db.get(Launch, launch_id)
     if launch is None:
         raise HTTPException(404, "Lancio non trovato")
@@ -218,7 +235,7 @@ def update_launch(launch_id: int, payload: LaunchBase, db: Session = Depends(get
 
 
 @router.delete("/launches/{launch_id}", status_code=204)
-def delete_launch(launch_id: int, db: Session = Depends(get_db)):
+def delete_launch(launch_id: int, db: Session = Depends(get_db), _: User = Depends(require_agency)):
     launch = db.get(Launch, launch_id)
     if launch is None:
         raise HTTPException(404, "Lancio non trovato")

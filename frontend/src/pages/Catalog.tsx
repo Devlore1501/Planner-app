@@ -58,6 +58,7 @@ import {
   useUpdateProduct,
 } from "@/lib/queries";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 import type { Launch, LaunchKind, Occasion, Offer, Product } from "@/types/api";
 
 // -------------------- Prodotti
@@ -82,7 +83,7 @@ const EMPTY_PRODUCT: ProductForm = {
   notes: "",
 };
 
-function ProductsTab({ brandId }: { brandId: number }) {
+function ProductsTab({ brandId, readOnly }: { brandId: number; readOnly: boolean }) {
   const { data: products, isLoading } = useProducts(brandId);
   const createProduct = useCreateProduct(brandId);
   const updateProduct = useUpdateProduct(brandId);
@@ -144,12 +145,14 @@ function ProductsTab({ brandId }: { brandId: number }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Aggiungi prodotto
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex justify-end">
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Aggiungi prodotto
+          </Button>
+        </div>
+      )}
 
       {(products ?? []).length === 0 ? (
         <EmptyState
@@ -157,10 +160,12 @@ function ProductsTab({ brandId }: { brandId: number }) {
           title="Nessun prodotto"
           description="Aggiungi i prodotti del brand: Claude li userà per proporre le email giuste."
           action={
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" />
-              Aggiungi prodotto
-            </Button>
+            !readOnly && (
+              <Button onClick={openCreate}>
+                <Plus className="h-4 w-4" />
+                Aggiungi prodotto
+              </Button>
+            )
           }
         />
       ) : (
@@ -173,7 +178,7 @@ function ProductsTab({ brandId }: { brandId: number }) {
                 <TableHead>Prezzo</TableHead>
                 <TableHead>Stagionalità</TableHead>
                 <TableHead>Best seller</TableHead>
-                <TableHead className="w-[90px]"></TableHead>
+                {!readOnly && <TableHead className="w-[90px]"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -192,35 +197,37 @@ function ProductsTab({ brandId }: { brandId: number }) {
                       <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
                     )}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Modifica prodotto"
-                        onClick={() => openEdit(product)}
-                      >
-                        <Pencil className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Elimina prodotto"
-                        onClick={() => {
-                          if (window.confirm(`Eliminare "${product.name}"?`)) {
-                            deleteProduct.mutate(product.id, {
-                              onSuccess: () =>
-                                toast.success("Prodotto eliminato"),
-                              onError: (err) =>
-                                toast.error(`Errore: ${err.message}`),
-                            });
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                  {!readOnly && (
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Modifica prodotto"
+                          onClick={() => openEdit(product)}
+                        >
+                          <Pencil className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Elimina prodotto"
+                          onClick={() => {
+                            if (window.confirm(`Eliminare "${product.name}"?`)) {
+                              deleteProduct.mutate(product.id, {
+                                onSuccess: () =>
+                                  toast.success("Prodotto eliminato"),
+                                onError: (err) =>
+                                  toast.error(`Errore: ${err.message}`),
+                              });
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -228,6 +235,7 @@ function ProductsTab({ brandId }: { brandId: number }) {
         </div>
       )}
 
+      {!readOnly && (
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -314,6 +322,7 @@ function ProductsTab({ brandId }: { brandId: number }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }
@@ -340,7 +349,7 @@ const EMPTY_OFFER: OfferForm = {
   notes: "",
 };
 
-function OffersTab({ brandId }: { brandId: number }) {
+function OffersTab({ brandId, readOnly }: { brandId: number; readOnly: boolean }) {
   const { data: offers, isLoading } = useOffers(brandId);
   const createOffer = useCreateOffer(brandId);
   const updateOffer = useUpdateOffer(brandId);
@@ -402,12 +411,14 @@ function OffersTab({ brandId }: { brandId: number }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Aggiungi offerta
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex justify-end">
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Aggiungi offerta
+          </Button>
+        </div>
+      )}
 
       {(offers ?? []).length === 0 ? (
         <EmptyState
@@ -415,10 +426,12 @@ function OffersTab({ brandId }: { brandId: number }) {
           title="Nessuna offerta"
           description="Aggiungi offerte e codici sconto da usare nelle email promozionali."
           action={
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" />
-              Aggiungi offerta
-            </Button>
+            !readOnly && (
+              <Button onClick={openCreate}>
+                <Plus className="h-4 w-4" />
+                Aggiungi offerta
+              </Button>
+            )
           }
         />
       ) : (
@@ -431,7 +444,7 @@ function OffersTab({ brandId }: { brandId: number }) {
                 <TableHead>Sconto</TableHead>
                 <TableHead>Validità</TableHead>
                 <TableHead>Attiva</TableHead>
-                <TableHead className="w-[90px]"></TableHead>
+                {!readOnly && <TableHead className="w-[90px]"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -456,6 +469,7 @@ function OffersTab({ brandId }: { brandId: number }) {
                   <TableCell>
                     <Switch
                       checked={offer.active}
+                      disabled={readOnly}
                       aria-label="Offerta attiva"
                       onCheckedChange={(checked) =>
                         updateOffer.mutate(
@@ -474,35 +488,37 @@ function OffersTab({ brandId }: { brandId: number }) {
                       }
                     />
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Modifica offerta"
-                        onClick={() => openEdit(offer)}
-                      >
-                        <Pencil className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Elimina offerta"
-                        onClick={() => {
-                          if (window.confirm(`Eliminare "${offer.name}"?`)) {
-                            deleteOffer.mutate(offer.id, {
-                              onSuccess: () =>
-                                toast.success("Offerta eliminata"),
-                              onError: (err) =>
-                                toast.error(`Errore: ${err.message}`),
-                            });
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                  {!readOnly && (
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Modifica offerta"
+                          onClick={() => openEdit(offer)}
+                        >
+                          <Pencil className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Elimina offerta"
+                          onClick={() => {
+                            if (window.confirm(`Eliminare "${offer.name}"?`)) {
+                              deleteOffer.mutate(offer.id, {
+                                onSuccess: () =>
+                                  toast.success("Offerta eliminata"),
+                                onError: (err) =>
+                                  toast.error(`Errore: ${err.message}`),
+                              });
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -510,6 +526,7 @@ function OffersTab({ brandId }: { brandId: number }) {
         </div>
       )}
 
+      {!readOnly && (
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -599,6 +616,7 @@ function OffersTab({ brandId }: { brandId: number }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }
@@ -776,7 +794,7 @@ function SuggestOccasionsCard({
   );
 }
 
-function OccasionsTab({ brandId }: { brandId: number }) {
+function OccasionsTab({ brandId, readOnly }: { brandId: number; readOnly: boolean }) {
   const { data: occasions, isLoading } = useOccasions(brandId);
   const createOccasion = useCreateOccasion(brandId);
   const updateOccasion = useUpdateOccasion(brandId);
@@ -834,14 +852,16 @@ function OccasionsTab({ brandId }: { brandId: number }) {
 
   return (
     <div className="space-y-4">
-      <SuggestOccasionsCard brandId={brandId} existingNames={existingNames} />
+      {!readOnly && <SuggestOccasionsCard brandId={brandId} existingNames={existingNames} />}
 
-      <div className="flex justify-end">
-        <Button variant="outline" onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Aggiungi occasione
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Aggiungi occasione
+          </Button>
+        </div>
+      )}
 
       {(occasions ?? []).length === 0 ? (
         <EmptyState
@@ -849,10 +869,12 @@ function OccasionsTab({ brandId }: { brandId: number }) {
           title="Nessuna occasione"
           description="Aggiungi ricorrenze e temi del periodo (festività, eventi, stagionalità) da sfruttare nei piani."
           action={
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" />
-              Aggiungi occasione
-            </Button>
+            !readOnly && (
+              <Button onClick={openCreate}>
+                <Plus className="h-4 w-4" />
+                Aggiungi occasione
+              </Button>
+            )
           }
         />
       ) : (
@@ -877,6 +899,7 @@ function OccasionsTab({ brandId }: { brandId: number }) {
                   </p>
                 )}
               </div>
+              {!readOnly && (
               <div className="flex items-center gap-1">
                 <Button
                   variant="ghost"
@@ -902,11 +925,13 @@ function OccasionsTab({ brandId }: { brandId: number }) {
                   <Trash2 className="h-4 w-4 text-muted-foreground" />
                 </Button>
               </div>
+              )}
             </div>
           ))}
         </div>
       )}
 
+      {!readOnly && (
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -955,6 +980,7 @@ function OccasionsTab({ brandId }: { brandId: number }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }
@@ -999,7 +1025,7 @@ function launchDuration(l: Launch): string {
   return `${days} giorni`;
 }
 
-function LaunchesTab({ brandId }: { brandId: number }) {
+function LaunchesTab({ brandId, readOnly }: { brandId: number; readOnly: boolean }) {
   const { data: launches, isLoading } = useLaunches(brandId);
   const createLaunch = useCreateLaunch(brandId);
   const updateLaunch = useUpdateLaunch(brandId);
@@ -1075,12 +1101,14 @@ function LaunchesTab({ brandId }: { brandId: number }) {
         </p>
       </div>
 
-      <div className="flex justify-end">
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Aggiungi lancio / promo
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex justify-end">
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Aggiungi lancio / promo
+          </Button>
+        </div>
+      )}
 
       {(launches ?? []).length === 0 ? (
         <EmptyState
@@ -1088,10 +1116,12 @@ function LaunchesTab({ brandId }: { brandId: number }) {
           title="Nessun lancio o promo"
           description="Aggiungi un lancio prodotto o una promo con le date: il prossimo piano preparerà la sequenza email dedicata."
           action={
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" />
-              Aggiungi lancio / promo
-            </Button>
+            !readOnly && (
+              <Button onClick={openCreate}>
+                <Plus className="h-4 w-4" />
+                Aggiungi lancio / promo
+              </Button>
+            )
           }
         />
       ) : (
@@ -1105,7 +1135,7 @@ function LaunchesTab({ brandId }: { brandId: number }) {
                 <TableHead>Durata</TableHead>
                 <TableHead>Protagonista</TableHead>
                 <TableHead>Attivo</TableHead>
-                <TableHead className="w-[90px]"></TableHead>
+                {!readOnly && <TableHead className="w-[90px]"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1136,6 +1166,7 @@ function LaunchesTab({ brandId }: { brandId: number }) {
                   <TableCell>
                     <Switch
                       checked={launch.active}
+                      disabled={readOnly}
                       aria-label="Lancio attivo"
                       onCheckedChange={(checked) =>
                         updateLaunch.mutate(
@@ -1150,34 +1181,36 @@ function LaunchesTab({ brandId }: { brandId: number }) {
                       }
                     />
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Modifica lancio"
-                        onClick={() => openEdit(launch)}
-                      >
-                        <Pencil className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Elimina lancio"
-                        onClick={() => {
-                          if (window.confirm(`Eliminare "${launch.name}"?`)) {
-                            deleteLaunch.mutate(launch.id, {
-                              onSuccess: () => toast.success("Eliminato"),
-                              onError: (err) =>
-                                toast.error(`Errore: ${err.message}`),
-                            });
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                  {!readOnly && (
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Modifica lancio"
+                          onClick={() => openEdit(launch)}
+                        >
+                          <Pencil className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Elimina lancio"
+                          onClick={() => {
+                            if (window.confirm(`Eliminare "${launch.name}"?`)) {
+                              deleteLaunch.mutate(launch.id, {
+                                onSuccess: () => toast.success("Eliminato"),
+                                onError: (err) =>
+                                  toast.error(`Errore: ${err.message}`),
+                              });
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -1185,6 +1218,7 @@ function LaunchesTab({ brandId }: { brandId: number }) {
         </div>
       )}
 
+      {!readOnly && (
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -1280,6 +1314,7 @@ function LaunchesTab({ brandId }: { brandId: number }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }
@@ -1289,6 +1324,8 @@ function LaunchesTab({ brandId }: { brandId: number }) {
 export function Catalog() {
   const { brandId: brandIdParam } = useParams();
   const brandId = Number(brandIdParam);
+  const { user } = useAuth();
+  const readOnly = user?.role !== "agency";
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -1307,16 +1344,16 @@ export function Catalog() {
           <TabsTrigger value="launches">Lanci &amp; Promo</TabsTrigger>
         </TabsList>
         <TabsContent value="products" className="pt-4">
-          <ProductsTab brandId={brandId} />
+          <ProductsTab brandId={brandId} readOnly={readOnly} />
         </TabsContent>
         <TabsContent value="offers" className="pt-4">
-          <OffersTab brandId={brandId} />
+          <OffersTab brandId={brandId} readOnly={readOnly} />
         </TabsContent>
         <TabsContent value="occasions" className="pt-4">
-          <OccasionsTab brandId={brandId} />
+          <OccasionsTab brandId={brandId} readOnly={readOnly} />
         </TabsContent>
         <TabsContent value="launches" className="pt-4">
-          <LaunchesTab brandId={brandId} />
+          <LaunchesTab brandId={brandId} readOnly={readOnly} />
         </TabsContent>
       </Tabs>
     </div>

@@ -2,7 +2,12 @@ import { useState } from "react";
 import {
   CheckCircle2,
   FlaskConical,
+  KeyRound,
+  Plus,
   Save,
+  Trash2,
+  UserPlus,
+  Users,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -19,11 +24,25 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  useBrands,
+  useCreateUser,
+  useDeleteUser,
   useNotionSettings,
+  useResetUserPassword,
   useSaveNotionSettings,
   useSystemStatus,
+  useUsers,
 } from "@/lib/queries";
+import { useAuth } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
+import type { UserRole } from "@/types/api";
 
 function StatusRow({
   label,
@@ -54,6 +73,208 @@ function StatusRow({
         {ok ? okLabel : koLabel}
       </span>
     </div>
+  );
+}
+
+const ROLE_STYLES: Record<string, string> = {
+  agency: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  client: "border-emerald-200 bg-emerald-50 text-emerald-700",
+};
+
+function UsersCard() {
+  const { user: me } = useAuth();
+  const { data: users, isLoading } = useUsers();
+  const { data: brands } = useBrands();
+  const createUser = useCreateUser();
+  const resetPassword = useResetUserPassword();
+  const deleteUser = useDeleteUser();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<UserRole>("client");
+  const [brandId, setBrandId] = useState<string>("");
+
+  function handleCreate() {
+    if (!email.trim() || !password.trim()) {
+      toast.error("Email e password sono obbligatorie");
+      return;
+    }
+    if (role === "client" && !brandId) {
+      toast.error("Seleziona il brand del cliente");
+      return;
+    }
+    createUser.mutate(
+      {
+        email: email.trim(),
+        password,
+        role,
+        brand_id: role === "client" ? Number(brandId) : null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Account creato");
+          setEmail("");
+          setPassword("");
+          setBrandId("");
+        },
+        onError: (err) => toast.error(`Errore: ${err.message}`),
+      }
+    );
+  }
+
+  function handleReset(userId: number) {
+    const newPassword = window.prompt("Nuova password per questo account:");
+    if (!newPassword) return;
+    resetPassword.mutate(
+      { id: userId, password: newPassword },
+      {
+        onSuccess: () => toast.success("Password aggiornata"),
+        onError: (err) => toast.error(`Errore: ${err.message}`),
+      }
+    );
+  }
+
+  function handleDelete(userId: number, userEmail: string) {
+    if (!window.confirm(`Eliminare l'account "${userEmail}"?`)) return;
+    deleteUser.mutate(userId, {
+      onSuccess: () => toast.success("Account eliminato"),
+      onError: (err) => toast.error(`Errore: ${err.message}`),
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-primary" />
+          Utenti
+        </CardTitle>
+        <CardDescription>
+          Account agenzia (accesso a tutti i brand) e account cliente (accesso al
+          proprio brand: piani, catalogo, saldo pacchetto).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <Skeleton className="h-32 w-full" />
+        ) : (
+          <div className="space-y-2">
+            {(users ?? []).map((u) => (
+              <div
+                key={u.id}
+                className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-medium">{u.email}</span>
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                        ROLE_STYLES[u.role] ?? "border-border bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {u.role === "agency" ? "agenzia" : "cliente"}
+                    </span>
+                  </div>
+                  {u.brand_name && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {u.brand_name}
+                    </p>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Reimposta password"
+                    onClick={() => handleReset(u.id)}
+                  >
+                    <KeyRound className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                  {u.id !== me?.id && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Elimina account"
+                      onClick={() => handleDelete(u.id, u.email)}
+                    >
+                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-3 rounded-lg border border-dashed border-border p-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <UserPlus className="h-4 w-4 text-primary" />
+            Nuovo account
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="cliente@brand.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Password</Label>
+              <Input
+                type="text"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="password provvisoria"
+              />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Ruolo</Label>
+              <div className="flex gap-2">
+                {(["client", "agency"] as UserRole[]).map((r) => (
+                  <Button
+                    key={r}
+                    type="button"
+                    variant={role === r ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setRole(r)}
+                  >
+                    {r === "client" ? "Cliente" : "Agenzia"}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            {role === "client" && (
+              <div className="space-y-1.5">
+                <Label>Brand</Label>
+                <Select value={brandId} onValueChange={setBrandId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleziona brand" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(brands ?? []).map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={handleCreate} disabled={createUser.isPending}>
+              <Plus className="h-4 w-4" />
+              {createUser.isPending ? "Creazione…" : "Crea account"}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -104,6 +325,8 @@ export function Settings() {
           Configurazione a livello agenzia (valida per tutti i brand).
         </p>
       </div>
+
+      <UsersCard />
 
       {/* Notion */}
       <Card>

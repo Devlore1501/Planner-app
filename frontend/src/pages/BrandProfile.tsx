@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { FileUp, Loader2, Save, Sparkles } from "lucide-react";
+import { FileUp, ImageIcon, Loader2, Save, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,8 +14,88 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBrand, useExtractProfile, useUpdateBrand } from "@/lib/queries";
+import { useBrand, useExtractProfile, useSetPackage, useUpdateBrand } from "@/lib/queries";
+import { useAuth } from "@/lib/auth";
 import type { Brand, ExtractedProfile } from "@/types/api";
+
+function PackageCard({ brand, isAgency }: { brand: Brand; isAgency: boolean }) {
+  const setPackage = useSetPackage(brand.id);
+  const [topUp, setTopUp] = useState("");
+  const remaining = Math.max(0, brand.package_total - brand.package_used);
+  const pct = brand.package_total > 0
+    ? Math.min(100, Math.round((brand.package_used / brand.package_total) * 100))
+    : 0;
+
+  function handleTopUp() {
+    const value = Number(topUp);
+    if (!Number.isFinite(value) || value < 0) {
+      toast.error("Inserisci un numero valido");
+      return;
+    }
+    setPackage.mutate(
+      { package_total: value },
+      {
+        onSuccess: () => {
+          toast.success("Pacchetto aggiornato");
+          setTopUp("");
+        },
+        onError: (err) => toast.error(`Errore: ${err.message}`),
+      }
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ImageIcon className="h-4 w-4 text-primary" />
+          Pacchetto grafiche
+        </CardTitle>
+        <CardDescription>
+          Le email in formato grafica vengono scalate dal pacchetto quando il
+          piano viene approvato.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-baseline justify-between text-sm">
+          <span>
+            <span className="text-lg font-semibold tabular-nums">{remaining}</span>
+            <span className="text-muted-foreground"> disponibili su {brand.package_total}</span>
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {brand.package_used} usate
+          </span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full bg-primary transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        {isAgency && (
+          <div className="flex items-center gap-2 pt-1">
+            <Input
+              type="number"
+              min={0}
+              placeholder="Nuovo totale pacchetto"
+              className="max-w-[220px]"
+              value={topUp}
+              onChange={(e) => setTopUp(e.target.value)}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTopUp}
+              disabled={setPackage.isPending || topUp === ""}
+            >
+              Aggiorna
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 interface FormState {
   name: string;
@@ -59,6 +139,8 @@ function splitLines(value: string): string[] {
 export function BrandProfile() {
   const { brandId: brandIdParam } = useParams();
   const brandId = Number(brandIdParam);
+  const { user } = useAuth();
+  const isAgency = user?.role === "agency";
   const { data: brand, isLoading } = useBrand(brandId);
   const updateBrand = useUpdateBrand(brandId);
   const extract = useExtractProfile(brandId);
@@ -171,12 +253,17 @@ export function BrandProfile() {
             Questi dati alimentano la generazione dei piani editoriali.
           </p>
         </div>
-        <Button onClick={handleSave} disabled={updateBrand.isPending}>
-          <Save className="h-4 w-4" />
-          {updateBrand.isPending ? "Salvataggio…" : "Salva profilo"}
-        </Button>
+        {isAgency && (
+          <Button onClick={handleSave} disabled={updateBrand.isPending}>
+            <Save className="h-4 w-4" />
+            {updateBrand.isPending ? "Salvataggio…" : "Salva profilo"}
+          </Button>
+        )}
       </div>
 
+      {brand && <PackageCard brand={brand} isAgency={isAgency} />}
+
+      {isAgency && (
       <Card className="border-primary/25 bg-gradient-to-br from-primary/[0.04] to-transparent">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -217,6 +304,7 @@ export function BrandProfile() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -232,6 +320,7 @@ export function BrandProfile() {
               id="name"
               value={form.name}
               onChange={(e) => set("name", e.target.value)}
+              disabled={!isAgency}
             />
           </div>
           <div className="space-y-2">
@@ -242,6 +331,7 @@ export function BrandProfile() {
               value={form.description}
               onChange={(e) => set("description", e.target.value)}
               placeholder="Cosa vende il brand, a chi, come…"
+              disabled={!isAgency}
             />
           </div>
           <div className="space-y-2">
@@ -252,6 +342,7 @@ export function BrandProfile() {
               value={form.tone_of_voice}
               onChange={(e) => set("tone_of_voice", e.target.value)}
               placeholder="es. prima persona, confidenziale, da enologo"
+              disabled={!isAgency}
             />
           </div>
           <div className="space-y-2">
@@ -261,6 +352,7 @@ export function BrandProfile() {
               rows={2}
               value={form.mission}
               onChange={(e) => set("mission", e.target.value)}
+              disabled={!isAgency}
             />
           </div>
           <div className="space-y-2">
@@ -270,6 +362,7 @@ export function BrandProfile() {
               rows={2}
               value={form.positioning}
               onChange={(e) => set("positioning", e.target.value)}
+              disabled={!isAgency}
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -283,6 +376,7 @@ export function BrandProfile() {
                 className="w-32"
                 value={form.emails_per_week}
                 onChange={(e) => set("emails_per_week", Number(e.target.value))}
+                disabled={!isAgency}
               />
               <p className="text-xs text-muted-foreground">
                 Base del piano mensile (×4).
@@ -292,9 +386,10 @@ export function BrandProfile() {
               <Label htmlFor="country">Paese di destinazione</Label>
               <select
                 id="country"
-                className="flex h-10 w-full max-w-[220px] cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-10 w-full max-w-[220px] cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                 value={form.country}
                 onChange={(e) => set("country", e.target.value)}
+                disabled={!isAgency}
               >
                 <option value="IT">Italia</option>
                 <option value="FR">Francia</option>
@@ -331,6 +426,7 @@ export function BrandProfile() {
               value={form.avatar_who}
               onChange={(e) => set("avatar_who", e.target.value)}
               placeholder="es. appassionato di vino 35-60, acquista online…"
+              disabled={!isAgency}
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -342,6 +438,7 @@ export function BrandProfile() {
                 value={form.avatar_desires}
                 onChange={(e) => set("avatar_desires", e.target.value)}
                 placeholder={"bere meglio\nscoprire cantine"}
+                disabled={!isAgency}
               />
             </div>
             <div className="space-y-2">
@@ -352,6 +449,7 @@ export function BrandProfile() {
                 value={form.avatar_objections}
                 onChange={(e) => set("avatar_objections", e.target.value)}
                 placeholder={"prezzo\nspedizione"}
+                disabled={!isAgency}
               />
             </div>
           </div>
@@ -362,6 +460,7 @@ export function BrandProfile() {
               value={form.avatar_language}
               onChange={(e) => set("avatar_language", e.target.value)}
               placeholder="es. informale, evocativo"
+              disabled={!isAgency}
             />
           </div>
           <div className="space-y-2">
@@ -371,17 +470,20 @@ export function BrandProfile() {
               rows={2}
               value={form.avatar_notes}
               onChange={(e) => set("avatar_notes", e.target.value)}
+              disabled={!isAgency}
             />
           </div>
         </CardContent>
       </Card>
 
+      {isAgency && (
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={updateBrand.isPending}>
           <Save className="h-4 w-4" />
           {updateBrand.isPending ? "Salvataggio…" : "Salva profilo"}
         </Button>
       </div>
+      )}
     </div>
   );
 }

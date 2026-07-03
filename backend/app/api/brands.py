@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models.db_models import Brand, Plan, Product
-from ..models.schemas import BrandCreate, BrandBase, BrandOut, BrandSummary
+from ..models.db_models import Brand, Plan, Product, User
+from ..models.schemas import BrandCreate, BrandBase, BrandOut, BrandSummary, PackageIn
 from ..services import extractor
+from .deps import get_current_user, require_agency, require_brand_access
 
 router = APIRouter(prefix="/api/brands", tags=["brands"])
 
@@ -25,9 +26,12 @@ def _to_out(brand: Brand) -> BrandOut:
 
 
 @router.get("", response_model=list[BrandSummary])
-def list_brands(db: Session = Depends(get_db)):
+def list_brands(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    query = db.query(Brand)
+    if user.role == "client":
+        query = query.filter(Brand.id == user.brand_id)
     result = []
-    for b in db.query(Brand).order_by(Brand.name).all():
+    for b in query.order_by(Brand.name).all():
         last_plan = (
             db.query(Plan)
             .filter(Plan.brand_id == b.id)
@@ -52,7 +56,9 @@ def list_brands(db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=BrandOut, status_code=201)
-def create_brand(payload: BrandCreate, db: Session = Depends(get_db)):
+def create_brand(
+    payload: BrandCreate, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
     data = payload.model_dump(exclude_unset=True)
     if data.get("avatar") is not None:
         data["avatar"] = payload.avatar.model_dump()
@@ -64,12 +70,14 @@ def create_brand(payload: BrandCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{brand_id}", response_model=BrandOut)
-def get_brand(brand_id: int, db: Session = Depends(get_db)):
+def get_brand(brand_id: int, db: Session = Depends(get_db), _: User = Depends(require_brand_access)):
     return _to_out(get_brand_or_404(db, brand_id))
 
 
 @router.patch("/{brand_id}", response_model=BrandOut)
-def update_brand(brand_id: int, payload: BrandBase, db: Session = Depends(get_db)):
+def update_brand(
+    brand_id: int, payload: BrandBase, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
     brand = get_brand_or_404(db, brand_id)
     data = payload.model_dump(exclude_unset=True)
     if "avatar" in data and payload.avatar is not None:
@@ -81,8 +89,20 @@ def update_brand(brand_id: int, payload: BrandBase, db: Session = Depends(get_db
     return _to_out(brand)
 
 
+@router.patch("/{brand_id}/package", response_model=BrandOut)
+def set_package(
+    brand_id: int, payload: PackageIn, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
+    """Ricarica/imposta il pacchetto grafiche del cliente (valore assoluto)."""
+    brand = get_brand_or_404(db, brand_id)
+    brand.package_total = payload.package_total
+    db.commit()
+    db.refresh(brand)
+    return _to_out(brand)
+
+
 @router.delete("/{brand_id}", status_code=204)
-def delete_brand(brand_id: int, db: Session = Depends(get_db)):
+def delete_brand(brand_id: int, db: Session = Depends(get_db), _: User = Depends(require_agency)):
     brand = get_brand_or_404(db, brand_id)
     db.delete(brand)
     db.commit()
@@ -105,6 +125,7 @@ async def extract_profile(
     apply: bool = False,
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
+    _: User = Depends(require_agency),
 ):
     """Estrae il profilo brand da documenti caricati (PDF/testo).
 

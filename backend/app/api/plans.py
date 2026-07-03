@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models.db_models import Plan, PlanEmail
+from ..models.db_models import Plan, PlanEmail, User
 from ..models.schemas import (
     PlanDetail,
     PlanEmailOut,
@@ -19,6 +19,7 @@ from ..services import claude_ai
 from ..services.notion_api import NotionAPIError, NotionNotConfigured, publish_plan
 from ..services.planner import apply_email_payload, build_context, start_generation
 from .brands import get_brand_or_404
+from .deps import check_brand_access, get_current_user, require_agency, require_brand_access
 
 router = APIRouter(prefix="/api", tags=["plans"])
 
@@ -44,7 +45,7 @@ def _get_email(db: Session, plan_id: int, email_id: int) -> PlanEmail:
 
 
 @router.get("/brands/{brand_id}/plans", response_model=list[PlanSummary])
-def list_plans(brand_id: int, db: Session = Depends(get_db)):
+def list_plans(brand_id: int, db: Session = Depends(get_db), _: User = Depends(require_brand_access)):
     get_brand_or_404(db, brand_id)
     plans = (
         db.query(Plan)
@@ -56,7 +57,9 @@ def list_plans(brand_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/brands/{brand_id}/plans/generate", response_model=PlanSummary, status_code=202)
-def generate_plan(brand_id: int, payload: PlanGenerateIn, db: Session = Depends(get_db)):
+def generate_plan(
+    brand_id: int, payload: PlanGenerateIn, db: Session = Depends(get_db), _: User = Depends(require_agency)
+):
     brand = get_brand_or_404(db, brand_id)
     # normalizza al primo giorno del mese
     month_start = payload.month_start[:7] + "-01"
@@ -88,8 +91,9 @@ def generate_plan(brand_id: int, payload: PlanGenerateIn, db: Session = Depends(
 
 
 @router.get("/plans/{plan_id}", response_model=PlanDetail)
-def get_plan(plan_id: int, db: Session = Depends(get_db)):
+def get_plan(plan_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     plan = _get_plan(db, plan_id)
+    check_brand_access(user, plan.brand_id)
     out = PlanDetail.model_validate(plan)
     out.num_emails = len(plan.emails)
     out.emails = [PlanEmailOut.model_validate(e) for e in plan.emails]
@@ -97,16 +101,37 @@ def get_plan(plan_id: int, db: Session = Depends(get_db)):
     return out
 
 
+def _grafiche_count(plan: Plan) -> int:
+    return sum(1 for e in plan.emails if e.format != "testuale")
+
+
 @router.patch("/plans/{plan_id}", response_model=PlanSummary)
-def patch_plan(plan_id: int, payload: PlanPatch, db: Session = Depends(get_db)):
+def patch_plan(
+    plan_id: int, payload: PlanPatch, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
     plan = _get_plan(db, plan_id)
+    check_brand_access(user, plan.brand_id)
     if payload.status is not None:
         allowed = {("draft", "approved"), ("approved", "draft")}
         if (plan.status, payload.status) not in allowed:
             raise HTTPException(
                 409, f"Transizione di stato non valida: {plan.status} → {payload.status}"
             )
-        plan.status = payload.status
+        brand = plan.brand
+        if payload.status == "approved":
+            n = _grafiche_count(plan)
+            remaining = brand.package_total - brand.package_used
+            if n > remaining:
+                raise HTTPException(
+                    409,
+                    f"Pacchetto insufficiente: servono {n} grafiche, ne restano {remaining}. "
+                    "Ricarica il pacchetto prima di approvare.",
+                )
+            brand.package_used += n
+            plan.status = "approved"
+        else:  # approved -> draft: storna i crediti scalati
+            brand.package_used = max(0, brand.package_used - _grafiche_count(plan))
+            plan.status = "draft"
     if payload.notes is not None:
         plan.notes = payload.notes
     db.commit()
@@ -115,7 +140,7 @@ def patch_plan(plan_id: int, payload: PlanPatch, db: Session = Depends(get_db)):
 
 
 @router.delete("/plans/{plan_id}", status_code=204)
-def delete_plan(plan_id: int, db: Session = Depends(get_db)):
+def delete_plan(plan_id: int, db: Session = Depends(get_db), _: User = Depends(require_agency)):
     plan = _get_plan(db, plan_id)
     db.delete(plan)
     db.commit()
@@ -123,8 +148,14 @@ def delete_plan(plan_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/plans/{plan_id}/emails/{email_id}", response_model=PlanEmailOut)
 def patch_email(
-    plan_id: int, email_id: int, payload: PlanEmailPatch, db: Session = Depends(get_db)
+    plan_id: int,
+    email_id: int,
+    payload: PlanEmailPatch,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    plan = _get_plan(db, plan_id)
+    check_brand_access(user, plan.brand_id)
     email = _get_email(db, plan_id, email_id)
     data = payload.model_dump(exclude_unset=True)
     explicit_status = data.pop("status", None)
@@ -141,9 +172,14 @@ def patch_email(
 
 @router.post("/plans/{plan_id}/emails/{email_id}/regenerate", response_model=PlanEmailOut)
 def regenerate_email(
-    plan_id: int, email_id: int, payload: RegenerateIn, db: Session = Depends(get_db)
+    plan_id: int,
+    email_id: int,
+    payload: RegenerateIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     plan = _get_plan(db, plan_id)
+    check_brand_access(user, plan.brand_id)
     email = _get_email(db, plan_id, email_id)
     if plan.status == "generating":
         raise HTTPException(409, "Il piano è ancora in generazione")
@@ -190,12 +226,10 @@ def regenerate_email(
     return email
 
 
-@router.post("/plans/{plan_id}/publish", response_model=PublishResult)
-def publish(plan_id: int, db: Session = Depends(get_db)):
-    plan = _get_plan(db, plan_id)
-    if plan.status not in ("approved", "published"):
-        raise HTTPException(409, "Il piano deve essere approvato prima della pubblicazione")
-
+def _publish(db: Session, plan: Plan) -> dict:
+    """Pubblica il piano su Notion (invio al grafico). Solleva
+    NotionNotConfigured/NotionAPIError se non riesce; il chiamante decide
+    come gestirlo (409 sull'endpoint manuale, fallback su approvazione)."""
     emails = [
         {
             "id": e.id,
@@ -220,18 +254,29 @@ def publish(plan_id: int, db: Session = Depends(get_db)):
         }
         for e in plan.emails
     ]
-    try:
-        result = publish_plan(db, plan.brand.name, plan.month_start, emails)
-    except (NotionNotConfigured, NotionAPIError) as e:
-        raise HTTPException(502, str(e))
-
-    plan.status = "published"
+    result = publish_plan(db, plan.brand.name, plan.month_start, emails)
     plan.notion_database_id = result.get("notion_database_id") or ""
     plan.notion_url = result.get("notion_url") or ""
     url_by_email = {p["email_id"]: p.get("notion_url", "") for p in result.get("pages", [])}
     for e in plan.emails:
         if e.id in url_by_email:
             e.notion_page_url = url_by_email[e.id]
+    return result
+
+
+@router.post("/plans/{plan_id}/publish", response_model=PublishResult)
+def publish(plan_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    plan = _get_plan(db, plan_id)
+    check_brand_access(user, plan.brand_id)
+    if plan.status not in ("approved", "published"):
+        raise HTTPException(409, "Il piano deve essere approvato prima della pubblicazione")
+
+    try:
+        result = _publish(db, plan)
+    except (NotionNotConfigured, NotionAPIError) as e:
+        raise HTTPException(502, str(e))
+
+    plan.status = "published"
     db.commit()
     return PublishResult(
         status="published",

@@ -30,6 +30,18 @@ VERSION = "0.1.0"
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.environ.get("PLANNER_CLAUDE_MODEL", "claude-opus-4-8")
 
+# Auth: firma dei token di sessione. In produzione va impostata esplicitamente
+# (altrimenti ogni riavvio invalida le sessioni attive); in sviluppo locale un
+# default va bene.
+JWT_SECRET = os.environ.get("PLANNER_JWT_SECRET") or "dev-insecure-secret-change-me-please-32bytes"
+JWT_EXPIRES_HOURS = int(os.environ.get("PLANNER_JWT_EXPIRES_HOURS", "720"))  # 30 giorni
+
+# Bootstrap: se non esiste nessun utente al primo avvio, viene creato un
+# account agenzia con queste credenziali (default solo per comodità in mock
+# mode/dev; da impostare esplicitamente in produzione).
+ADMIN_EMAIL = os.environ.get("PLANNER_ADMIN_EMAIL", "admin@mailift.local")
+ADMIN_PASSWORD = os.environ.get("PLANNER_ADMIN_PASSWORD", "mailift-admin")
+
 # Valori iniziali Notion (sovrascrivibili via API /settings/notion)
 NOTION_TOKEN_ENV = os.environ.get("NOTION_TOKEN") or os.environ.get("NOTION_API_KEY") or ""
 NOTION_TEMPLATES_DB_ID_ENV = os.environ.get("NOTION_TEMPLATES_DB_ID", "")

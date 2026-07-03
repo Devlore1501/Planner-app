@@ -32,6 +32,12 @@ class Brand(Base):
     klaviyo_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     klaviyo_last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # pacchetto grafiche acquistato dal cliente: pool che si esaurisce, senza
+    # rinnovo automatico. Le email in formato "grafica" di un piano approvato
+    # vengono scalate da package_used; l'approvazione si blocca se non basta.
+    package_total: Mapped[int] = mapped_column(Integer, default=0)
+    package_used: Mapped[int] = mapped_column(Integer, default=0)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -50,6 +56,21 @@ class Brand(Base):
     launches: Mapped[list["Launch"]] = relationship(
         back_populates="brand", cascade="all, delete-orphan"
     )
+
+
+class User(Base):
+    """Account di accesso: ruolo 'agency' (tutti i brand) o 'client' (un solo brand)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(200), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), default="client")  # agency | client
+    brand_id: Mapped[int | None] = mapped_column(ForeignKey("brands.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    brand: Mapped[Brand | None] = relationship()
 
 
 class Product(Base):

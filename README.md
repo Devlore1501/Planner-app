@@ -23,6 +23,12 @@ eCommerce DTC su Klaviyo. Pensata per l'agenzia: più brand, un'unica dashboard.
 - **Approvazione + pubblicazione**: rivedi, modifica, rigenera le singole email; una volta
   approvato il piano viene pubblicato su Notion come calendario editoriale (un database con
   una pagina per email: giorno, oggetto, segmento, testo, template, stato).
+- **Login e pacchetto grafiche**: due ruoli — **agenzia** (accesso a tutti i brand,
+  configura integrazioni/template/utenti) e **cliente** (accesso al proprio brand: vede
+  il piano, lo approva, lo pubblica su Notion; sola lettura sul resto). Ogni brand ha un
+  **pacchetto grafiche** (es. 20/40/60) che si scala quando il piano viene approvato
+  (una email in formato "grafica" = un credito); l'approvazione si blocca se il pacchetto
+  non basta. L'agenzia ricarica il pacchetto dal profilo brand.
 
 ## Avvio
 
@@ -36,7 +42,10 @@ python3 -m venv .venv
 ./start.sh
 ```
 
-Apri http://localhost:5174. Le API sono documentate su http://localhost:8001/docs
+Apri http://localhost:5174. Al primo avvio viene creato un account agenzia di
+default (`admin@mailift.local` / `mailift-admin`, sovrascrivibile via env — vedi
+sotto): usalo per il primo login, poi crea gli account veri da Impostazioni →
+Utenti. Le API sono documentate su http://localhost:8001/docs
 e il contratto completo è in [design/api_contract.md](design/api_contract.md).
 
 ## Configurazione (.env nella root del repo o ~/.secrets/mailift/.env)
@@ -48,9 +57,11 @@ e il contratto completo è in [design/api_contract.md](design/api_contract.md).
 | `NOTION_TOKEN` | Token integrazione Notion (lettura template + pubblicazione calendari). Modificabile anche da UI in Impostazioni. |
 | `NOTION_TEMPLATES_DB_ID` | ID del database Notion con i ~350 template Canva categorizzati. |
 | `NOTION_CALENDAR_PARENT_ID` | ID della pagina Notion sotto cui creare i calendari editoriali. |
+| `PLANNER_JWT_SECRET` | Firma i token di sessione. **Da impostare esplicitamente in produzione** (senza, un default di sviluppo invalida le sessioni ad ogni riavvio del processo). |
+| `PLANNER_ADMIN_EMAIL` / `PLANNER_ADMIN_PASSWORD` | Credenziali del primo account agenzia creato automaticamente se il DB non ha ancora utenti (default `admin@mailift.local` / `mailift-admin`). Cambia la password dopo il primo login. |
 
 Le chiavi **Klaviyo sono per-brand** e si inseriscono dalla UI
-(workspace del brand → Integrazioni). Servono permessi read su
+(workspace del brand → Integrazioni, solo agenzia). Servono permessi read su
 Campaigns, Lists, Segments, Metrics, Accounts.
 
 ### Database Notion dei template

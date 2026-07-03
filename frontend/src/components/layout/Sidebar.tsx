@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBrand } from "@/lib/queries";
+import { useAuth } from "@/lib/auth";
 
 interface SidebarProps {
   brandId: number | null;
@@ -74,6 +75,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export function Sidebar({ brandId, className }: SidebarProps) {
   const { data: brand } = useBrand(brandId);
+  const { user } = useAuth();
+  const isAgency = user?.role === "agency";
 
   return (
     <aside
@@ -100,8 +103,12 @@ export function Sidebar({ brandId, className }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
-        <SectionLabel>Agenzia</SectionLabel>
-        <NavItem to="/" label="Dashboard" icon={Home} end />
+        {isAgency && (
+          <>
+            <SectionLabel>Agenzia</SectionLabel>
+            <NavItem to="/" label="Dashboard" icon={Home} end />
+          </>
+        )}
 
         {brandId != null && (
           <>
@@ -121,19 +128,23 @@ export function Sidebar({ brandId, className }: SidebarProps) {
               label="Catalogo"
               icon={Package}
             />
-            <NavItem
-              to={`/brands/${brandId}/integrations`}
-              label="Integrazioni"
-              icon={Plug}
-            />
+            {isAgency && (
+              <NavItem
+                to={`/brands/${brandId}/integrations`}
+                label="Integrazioni"
+                icon={Plug}
+              />
+            )}
           </>
         )}
       </nav>
 
-      <div className="space-y-0.5 border-t border-sidebar-border px-3 py-3">
-        <NavItem to="/templates" label="Template" icon={SwatchBook} />
-        <NavItem to="/settings" label="Impostazioni" icon={Settings} />
-      </div>
+      {isAgency && (
+        <div className="space-y-0.5 border-t border-sidebar-border px-3 py-3">
+          <NavItem to="/templates" label="Template" icon={SwatchBook} />
+          <NavItem to="/settings" label="Impostazioni" icon={Settings} />
+        </div>
+      )}
     </aside>
   );
 }
