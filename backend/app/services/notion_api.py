@@ -38,7 +38,14 @@ class NotionAPIError(Exception):
 def _client(token: str):
     from notion_client import Client
 
-    return Client(auth=token)
+    # notion-client >=3 usa di default l'API Notion "2025-09-03", che introduce
+    # i "data sources" (un database può contenerne più di uno: le proprietà
+    # non vivono più direttamente sul database, i parent di pagina cambiano
+    # forma). Il codice qui sotto è scritto per il modello precedente (un
+    # database = una sorgente dati, properties dirette, parent database_id):
+    # fissiamo la versione API storica, ancora ufficialmente supportata da
+    # Notion, per non dover riscrivere tutto sul nuovo modello.
+    return Client(auth=token, notion_version="2022-06-28")
 
 
 # ---------------------------------------------------------------- templates
